@@ -1,0 +1,74 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+from ete3 import Tree, TreeStyle
+
+def read_zika_data(csv_file):
+    """
+    从 CSV 文件中读取数据  
+    CSV 文件要求包含字段：Strain, Country, Continent
+    """
+    try:
+        df = pd.read_csv(csv_file)
+        return df
+    except Exception as e:
+        print(f"读取 CSV 文件失败: {e}")
+        return None
+
+def generate_newick_from_strains(strains):
+    """
+    根据样本（strain）生成简单的星型 Newick 格式字符串  
+    例如： (strain1:0.1,strain2:0.1,...):0.1;
+    """
+    leaf_list = [f"{s}:0.1" for s in strains]
+    newick = "(" + ",".join(leaf_list) + "):0.1;"
+    return newick
+
+def create_phylogenetic_tree(newick_str, output_image="zika_phylogenetic_tree.png"):
+    """
+    根据 Newick 字符串构建系统发育树，并保存为图片
+    """
+    tree = Tree(newick_str)
+    ts = TreeStyle()
+    ts.show_leaf_name = True
+    tree.render(output_image, tree_style=ts)
+    print(f"系统发育树已保存至 {output_image}")
+    return tree
+
+def plot_continent_country_bar(df, output_image="zika_infected_countries_by_continent.png"):
+    """
+    统计每个大洲中感染的国家/地区数量，并绘制柱状图  
+    取每个大洲中不同国家/地区的个数
+    """
+    # 计算每个大洲中唯一国家/地区的数量
+    continent_counts = df.groupby('Continent')['Country'].nunique()
+    ax = continent_counts.plot(kind='bar', figsize=(8, 6), color='skyblue')
+    ax.set_title("各大洲被感染国家/地区数量")
+    ax.set_xlabel("大洲")
+    ax.set_ylabel("国家/地区数量")
+    plt.tight_layout()
+    plt.savefig(output_image)
+    plt.show()
+    print(f"柱状图已保存至 {output_image}")
+
+if __name__ == "__main__":
+    # CSV 文件路径（请根据实际情况修改）
+    csv_file = "zika_data.csv"
+    df = read_zika_data(csv_file)
+    if df is None:
+        exit(1)
+
+    # 提取样本信息用于系统发育树构建，确保样本名称唯一
+    strains = df['Strain'].drop_duplicates().tolist()
+    if not strains:
+        print("没有找到有效的 Strain 信息")
+        exit(1)
+
+    # 生成 Newick 字符串（简单构造星型树）
+    newick = generate_newick_from_strains(strains)
+    print(f"生成的 Newick 字符串：{newick}")
+
+    # 构建系统发育树并保存为图片
+    create_phylogenetic_tree(newick)
+
+    # 绘制大洲感染国家/地区数量柱状图
+    plot_continent_country_bar(df)
