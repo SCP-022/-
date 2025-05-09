@@ -1,0 +1,127 @@
+import os
+import subprocess
+import json
+import pandas as pd
+from Bio import Phylo
+import matplotlib.pyplot as plt
+import folium
+from shutil import which
+
+# -----------------------------
+# 配置文件路径
+# -----------------------------
+metadata_tsv = "D:/Desktop/001/metadata.tsv"
+metadata_jsonld = "D:/Desktop/001/metadata.jsonld"
+sequences_fasta = "D:/Desktop/001/sequences.fasta"
+qc_output_dir = "D:/Desktop/001/fastqc_results"
+aligned_fasta = "D:/Desktop/001/aligned.fasta"
+tree_nwk = "D:/Desktop/001/tree.nwk"
+tree_image = "D:/Desktop/001/phylogenetic_tree.png"
+map_file = "D:/Desktop/001/distribution_map.html"
+
+# -----------------------------
+# 工具检查函数
+# -----------------------------
+def check_tool(tool):
+    return which(tool) is not None
+
+for tool in ["mafft", "fasttree", "fastqc"]:
+    if not check_tool(tool):
+        raise EnvironmentError(f"{tool} 工具未安装或未添加到系统环境变量中。")
+
+# -----------------------------
+# 1. 元数据转换：使用 bioconvert API 模拟转换为 JSON-LD 格式
+#    注：此处手动实现转换逻辑，生成符合平台标准的 JSON-LD 格式
+# -----------------------------
+def convert_metadata_to_jsonld(tsv_file, jsonld_file):
+    print("正在将元数据转换为 JSON-LD 格式…")
+    # 读取 TSV 文件
+    df = pd.read_csv(tsv_file, sep="\t")
+    # 构造简单的 JSON-LD 格式，@context 使用列名映射
+    jsonld = {
+        "@context": {col: col for col in df.columns},
+        "@graph": df.to_dict(orient="records")
+    }
+    with open(jsonld_file, "w", encoding="utf-8") as out_f:
+        json.dump(jsonld, out_f, indent=4, ensure_ascii=False)
+    print(f"元数据已转换并保存在 {jsonld_file}")
+
+convert_metadata_to_jsonld(metadata_tsv, metadata_jsonld)
+
+# -----------------------------
+# 2. 质量控制：使用 FastQC 对序列文件进行质量评估
+# -----------------------------
+def run_fastqc(fasta_file, output_dir):
+    print("正在运行 FastQC 进行质量控制…")
+    os.makedirs(output_dir, exist_ok=True)
+    subprocess.run(["fastqc", fasta_file, "-o", output_dir], check=True)
+    print(f"FastQC 分析完成，结果保存在 {output_dir}")
+
+run_fastqc(sequences_fasta, qc_output_dir)
+
+# -----------------------------
+# 3. 多序列比对：使用 mafft
+# -----------------------------
+print("正在运行 MAFFT 进行序列比对…")
+with open(aligned_fasta, "w", encoding="utf-8") as out_align:
+    subprocess.run(["mafft", "--auto", sequences_fasta], stdout=out_align, check=True)
+print(f"序列比对完成，结果保存在 {aligned_fasta}")
+
+# -----------------------------
+# 4. 系统发育树构建：使用 FastTree
+# -----------------------------
+print("正在运行 FastTree 构建系统发育树…")
+result = subprocess.run(["fasttree", aligned_fasta], stdout=subprocess.PIPE, check=True, text=True)
+with open(tree_nwk, "w", encoding="utf-8") as tree_out:
+    tree_out.write(result.stdout)
+print(f"系统发育树生成完成，结果保存在 {tree_nwk}")
+
+# -----------------------------
+# 5. 系统发育树可视化：绘制并保存图片
+# -----------------------------
+print("正在绘制系统发育树…")
+tree = Phylo.read(tree_nwk, "newick")
+plt.figure(figsize=(10, 10))
+Phylo.draw(tree, do_show=False)
+plt.savefig(tree_image)
+plt.close()
+print(f"系统发育树图片保存在 {tree_image}")
+
+# -----------------------------
+# 6. 分布地图生成：基于元数据中的位置信息
+#     注意：metadata.tsv 中需要包含 'strain'、'latitude' 和 'longitude' 列
+# -----------------------------
+print("正在生成分布地图…")
+metadata = pd.read_csv(metadata_tsv, sep="\t")
+required_cols = {'strain', 'latitude', 'longitude'}
+if not required_cols.issubset(metadata.columns):
+    raise ValueError("metadata.tsv 文件中必须包含 'strain'、'latitude' 和 'longitude' 列。")
+
+# 地图中心点取所有点平均值
+map_center = [metadata['latitude'].mean(), metadata['longitude'].mean()]
+m = folium.Map(location=map_center, zoom_start=4)
+
+for idx, row in metadata.iterrows():
+    folium.Marker(
+        location=[row['latitude'], row['longitude']],
+        popup=str(row['strain'])
+    ).add_to(m)
+
+m.save(map_file)
+print(f"分布地图已生成并保存在 {map_file}")
+
+# -----------------------------
+# 7. 元数据管理：读取转换后的 JSON-LD，并输出摘要信息
+# -----------------------------
+def manage_metadata(jsonld_file):
+    print("正在进行元数据管理…")
+    with open(jsonld_file, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    num_records = len(data.get("@graph", []))
+    print(f"元数据管理：总共有 {num_records} 条记录。")
+    # 此处可进一步添加元数据版本管理、更新/校验机制
+    return data
+
+metadata_jsonld_data = manage_metadata(metadata_jsonld)
+
+print("所有流程已完成！")
