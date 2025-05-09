@@ -1,51 +1,72 @@
 import os
 import json
-from bioconvert import Bioconvert
 
-def convert_to_jsonld(input_file, output_file):
+def convert_fastq_to_jsonld(input_file, output_file):
     """
-    使用 BioConvert 将输入文件转换为 JSON-LD 格式
+    将 FASTQ 文件转换为 JSON-LD 格式
+    FASTQ 文件通常每 4 行构成一个记录
     """
-    # 检查输入文件是否存在
-    if not os.path.exists(input_file):
-        raise FileNotFoundError(f"输入文件 {input_file} 不存在")
+    with open(input_file, "r") as f:
+        lines = f.readlines()
+    entries = []
+    for i in range(0, len(lines), 4):
+        if i+3 < len(lines):
+            entry = {
+                "identifier": lines[i].strip(),
+                "sequence": lines[i+1].strip(),
+                "optional": lines[i+2].strip(),
+                "quality": lines[i+3].strip()
+            }
+            entries.append(entry)
+    jsonld_data = {
+        "@context": "http://schema.org",
+        "@type": "Dataset",
+        "format": "FASTQ",
+        "data": entries
+    }
+    with open(output_file, "w") as f:
+        json.dump(jsonld_data, f, indent=4)
+    print(f"FASTQ 文件已成功转换为 JSON-LD 格式: {output_file}")
 
-    # 使用 BioConvert 进行格式转换
+def convert_csv_to_jsonld(input_file, output_file):
+    """
+    将 CSV 文件转换为 JSON-LD 格式
+    假设 CSV 文件第一行为表头
+    """
+    with open(input_file, "r") as f:
+        lines = f.readlines()
+    if not lines:
+        print("CSV 文件为空")
+        return
+    header = lines[0].strip().split(",")
+    records = []
+    for line in lines[1:]:
+        fields = line.strip().split(",")
+        record = dict(zip(header, fields))
+        records.append(record)
+    jsonld_data = {
+        "@context": "http://schema.org",
+        "@type": "Dataset",
+        "format": "CSV",
+        "data": records
+    }
+    with open(output_file, "w") as f:
+        json.dump(jsonld_data, f, indent=4)
+    print(f"CSV 文件已成功转换为 JSON-LD 格式: {output_file}")
+
+def convert_biom_to_jsonld(input_file, output_file):
+    """
+    将 BIOM 文件转换为 JSON-LD 格式
+    此处假设 BIOM 文件为 JSON 格式；
+    实际项目中可以结合 biom-format 库进行解析
+    """
     try:
-        converter = Bioconvert(input_file, output_file)
-        converter()
-        print(f"文件已成功转换为 {output_file}")
-    except Exception as e:
-        print(f"转换失败: {e}")
-
-def parse_to_jsonld(input_file, output_file):
-    """
-    将解析后的文件内容转换为 JSON-LD 格式
-    """
-    # 示例：将 CSV 文件解析为 JSON-LD
-    if input_file.endswith(".csv"):
         with open(input_file, "r") as f:
-            lines = f.readlines()
-        
-        # 简单解析 CSV 文件为 JSON-LD 格式
-        jsonld_data = {
-            "@context": "http://schema.org",
-            "@type": "Dataset",
-            "data": [line.strip().split(",") for line in lines]
-        }
-
-        # 写入 JSON-LD 文件
-        with open(output_file, "w") as f:
-            json.dump(jsonld_data, f, indent=4)
-        print(f"CSV 文件已成功转换为 JSON-LD 格式: {output_file}")
-    else:
-        print("当前仅支持 CSV 文件的解析为 JSON-LD")
-
-# 示例调用
-if __name__ == "__main__":
-    # 输入文件路径
-    input_file = "example.csv"  # 替换为实际文件路径
-    output_file = "output.jsonld"
-
-    # 转换为 JSON-LD
-    parse_to_jsonld(input_file, output_file)
+            biom_data = json.load(f)
+    except Exception as e:
+        print(f"BIOM 文件解析失败: {e}")
+        return
+    jsonld_data = {
+        "@context": "http://schema.org",
+        "@type": "Dataset",
+    
