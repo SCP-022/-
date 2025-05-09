@@ -1,0 +1,21 @@
+# 安装并加载 metagenomeSeq 包
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+BiocManager::install("metagenomeSeq")
+
+library(metagenomeSeq)
+
+# 模拟计数矩阵（行：样本，列：特征）
+count_matrix <- matrix(sample(0:1000, 60, replace = TRUE), nrow = 6)
+rownames(count_matrix) <- paste0("sample", 1:6)
+colnames(count_matrix) <- paste0("feature", 1:10)
+
+# 创建 MRexperiment 对象
+mr_obj <- newMRexperiment(count_matrix)
+
+# 进行 CSS 标准化
+mr_obj <- cumNorm(mr_obj)
+css_norm_counts <- MRcounts(mr_obj, norm = TRUE, log = TRUE)  # 取对数后的标准化计数
+
+print("CSS 标准化后的结果：")
+print(css_norm_counts)
