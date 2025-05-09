@@ -1,0 +1,33 @@
+import subprocess
+import sys
+
+def run_trimmomatic(input_file: str, output_file: str, phred: int = 20):
+    """
+    使用 Trimmomatic 对输入 FASTQ 文件进行质量过滤，剔除低质量 reads（Phred评分 <phred）
+    这里采用单端（SE）模式以及 sliding window 过滤算法：
+      - SLIDINGWINDOW:窗口大小4，低于 phred 分数的则截断
+      - MINLEN:确保读长不低于50个碱基
+    注意：需提前下载 Trimmomatic jar 文件并放置于与脚本相同目录中或指定正确路径。
+    """
+    # 构造 Trimmomatic 命令（假设数据为 phred33 格式）
+    command = [
+        "java", "-jar", "trimmomatic-0.39.jar", "SE", "-phred33",
+        input_file, output_file,
+        f"SLIDINGWINDOW:4:{phred}",
+        "MINLEN:50"
+    ]
+    try:
+        result = subprocess.run(command, capture_output=True, text=True, check=True)
+        print("Trimmomatic 执行成功")
+        print(result.stdout)
+    except subprocess.CalledProcessError as e:
+        print("Trimmomatic 执行失败")
+        print(e.stderr)
+
+if __name__ == "__main__":
+    if len(sys.argv) != 3:
+        print("用法: python trimmomatic_filter.py <输入FASTQ文件> <输出FASTQ文件>")
+        sys.exit(1)
+    input_fastq = sys.argv[1]
+    output_fastq = sys.argv[2]
+    run_trimmomatic(input_fastq, output_fastq, phred=20)
